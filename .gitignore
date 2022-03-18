@@ -10,4 +10,4 @@
 .DS_Store
 .idea/
 .anaconda3/
-sample_images/
+#sample_images/
