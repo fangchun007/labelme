@@ -1,5 +1,6 @@
 auto_save: false
 display_label_popup: true
+# display_line_width_popup: true
 store_data: true
 keep_prev: false
 keep_prev_scale: false
@@ -10,9 +11,13 @@ logger_level: info
 flags: null
 label_flags: null
 labels: null
+line_width_flags: null
+line_widths: null
 file_search: null
 sort_labels: true
 validate_label: null
+sort_line_widths: true
+validate_line_width: null
 
 default_shape_color: [0, 255, 0]
 shape_color: auto  # null, 'auto', 'manual'
@@ -41,11 +46,21 @@ label_dock:
   closable: true
   movable: true
   floatable: true
+line_width_dock:
+  show: true
+  closable: true
+  movable: true
+  floatable: true
 shape_dock:
   show: true
   closable: true
   movable: true
   floatable: true
+# shape_lw_dock:
+#   show: true
+#   closable: true
+#   movable: true
+#   floatable: true
 file_dock:
   show: true
   closable: true
@@ -56,6 +71,13 @@ file_dock:
 show_label_text_field: true
 label_completion: startswith
 fit_to_content:
+  column: true
+  row: false
+
+# line_width_dialog
+show_line_width_text_field: true
+line_width_completion: startswith
+line_width_fit_to_content:
   column: true
   row: false
 
@@ -102,5 +124,6 @@ shortcuts:
   undo_last_point: Ctrl+Z
   add_point_to_edge: Ctrl+Shift+P
   edit_label: Ctrl+E
+  edit_line_width: Ctrl+L
   toggle_keep_prev_mode: Ctrl+P
   remove_selected_point: [Meta+H, Backspace]

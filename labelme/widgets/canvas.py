@@ -88,9 +88,13 @@ class Canvas(QtWidgets.QWidget):
         # Set widget options.
         self.setMouseTracking(True)
         self.setFocusPolicy(QtCore.Qt.WheelFocus)
+        self.line_width = 1
 
     def fillDrawing(self):
         return self._fill_drawing
+
+    def setLineWidth(self, value):
+        self.line_width = value
 
     def setFillDrawing(self, value):
         self._fill_drawing = value
@@ -371,6 +375,9 @@ class Canvas(QtWidgets.QWidget):
                 elif not self.outOfPixmap(pos):
                     # Create new shape.
                     self.current = Shape(shape_type=self.createMode)
+                    # # We only modify the line width for linestrip.
+                    if self.createMode == "linestrip":
+                        self.current.set_line_width(self.line.line_width)
                     self.current.addPoint(pos)
                     if self.createMode == "point":
                         self.finalise()
@@ -626,6 +633,7 @@ class Canvas(QtWidgets.QWidget):
                 shape.fill = shape.selected or shape == self.hShape
                 shape.paint(p)
         if self.current:
+            self.current.set_line_width(self.line_width)
             self.current.paint(p)
             self.line.paint(p)
         if self.selectedShapesCopy:

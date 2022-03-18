@@ -21,6 +21,7 @@ from .qt import newButton
 from .qt import newAction
 from .qt import addActions
 from .qt import labelValidator
+from .qt import lineWidthValidator
 from .qt import struct
 from .qt import distance
 from .qt import distancetoline

@@ -71,6 +71,13 @@ def main():
         default=argparse.SUPPRESS,
     )
     parser.add_argument(
+        "--nosortlinewidths",
+        dest="sort_line_widths",
+        action="store_false",
+        help="stop sorting line widths",
+        default=argparse.SUPPRESS,
+    )
+    parser.add_argument(
         "--flags",
         help="comma separated list of flags OR file containing flags",
         default=argparse.SUPPRESS,
@@ -86,6 +93,11 @@ def main():
     parser.add_argument(
         "--labels",
         help="comma separated list of labels OR file containing labels",
+        default=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--line_widths",
+        help="comma separated list of line widths OR file containing line widths",
         default=argparse.SUPPRESS,
     )
     parser.add_argument(
@@ -128,6 +140,13 @@ def main():
                 args.labels = [line.strip() for line in f if line.strip()]
         else:
             args.labels = [line for line in args.labels.split(",") if line]
+
+    if hasattr(args, "line_widths"):
+        if os.path.isfile(args.line_widths):
+            with codecs.open(args.line_widths, "r", encoding="utf-8") as f:
+                args.line_widths = [line.strip() for line in f if line.strip()]
+        else:
+            args.line_widths = [line.strip() for line in args.line_widths.split(",") if line]
 
     if hasattr(args, "label_flags"):
         if os.path.isfile(args.label_flags):

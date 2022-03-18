@@ -47,6 +47,7 @@ class Shape(object):
     def __init__(
         self,
         label=None,
+        line_width=2,
         line_color=None,
         shape_type=None,
         flags=None,
@@ -77,6 +78,16 @@ class Shape(object):
             self.line_color = line_color
 
         self.shape_type = shape_type
+        if shape_type == "linestrip": # Used in the loading existed shapes for showing
+            self.line_width = line_width
+        else:
+            self.line_width = max(1, int(round(2.0 / self.scale)))
+
+    def set_line_width(self, line_width=18):
+        if self.shape_type == "linestrip":
+            self.line_width = line_width
+        else:
+            self.line_width = max(1, int(round(2.0 / self.scale)))
 
     @property
     def shape_type(self):
@@ -137,8 +148,8 @@ class Shape(object):
                 self.select_line_color if self.selected else self.line_color
             )
             pen = QtGui.QPen(color)
-            # Try using integer sizes for smoother drawing(?)
-            pen.setWidth(max(1, int(round(2.0 / self.scale))))
+
+            pen.setWidth(self.line_width)
             painter.setPen(pen)
 
             line_path = QtGui.QPainterPath()

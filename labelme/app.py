@@ -27,10 +27,14 @@ from labelme.widgets import BrightnessContrastDialog
 from labelme.widgets import Canvas
 from labelme.widgets import FileDialogPreview
 from labelme.widgets import LabelDialog
+from labelme.widgets import LineWidthDialog
 from labelme.widgets import LabelListWidget
 from labelme.widgets import LabelListWidgetItem
+from labelme.widgets import LineWidthListWidget
+from labelme.widgets import LineWidthListWidgetItem
 from labelme.widgets import ToolBar
 from labelme.widgets import UniqueLabelQListWidget
+from labelme.widgets import UniqueLineWidthQListWidget
 from labelme.widgets import ZoomWidget
 
 # FIXME
@@ -41,7 +45,7 @@ from labelme.widgets import ZoomWidget
 
 
 LABEL_COLORMAP = imgviz.label_colormap()
-
+LINE_WIDTH_COLORMAP = imgviz.label_colormap()
 
 class MainWindow(QtWidgets.QMainWindow):
 
@@ -107,7 +111,18 @@ class MainWindow(QtWidgets.QMainWindow):
             flags=self._config["label_flags"],
         )
 
+        self.lineWidthDialog = LineWidthDialog(
+            parent=self,
+            line_widths=self._config["line_widths"],
+            sort_line_widths=self._config["sort_line_widths"],
+            show_text_field=self._config["show_line_width_text_field"],
+            completion=self._config["line_width_completion"],
+            fit_to_content=self._config["line_width_fit_to_content"],
+            flags=self._config["line_width_flags"],
+        )
+
         self.labelList = LabelListWidget()
+
         self.lastOpenDir = None
 
         self.flag_dock = self.flag_widget = None
@@ -123,6 +138,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.labelList.itemDoubleClicked.connect(self.editLabel)
         self.labelList.itemChanged.connect(self.labelItemChanged)
         self.labelList.itemDropped.connect(self.labelOrderChanged)
+
         self.shape_dock = QtWidgets.QDockWidget(
             self.tr("Polygon Labels"), self
         )
@@ -145,6 +161,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.label_dock = QtWidgets.QDockWidget(self.tr("Label List"), self)
         self.label_dock.setObjectName("Label List")
         self.label_dock.setWidget(self.uniqLabelList)
+
+        self.uniqLineWidthList = UniqueLineWidthQListWidget()
+        self.uniqLineWidthList.setToolTip(
+            self.tr(
+                "Select line width to start annotating for it. "
+                "Press 'Esc' to deselect."
+            )
+        )
+        if self._config["line_widths"]:
+            for line_width in self._config["line_widths"]:
+                item = self.uniqLineWidthList.createItemFromLineWidth(line_width)
+                self.uniqLineWidthList.addItem(item)
+                rgb = self._get_rgb_by_line_width(line_width)
+                self.uniqLineWidthList.setItemLineWidth(item, line_width, rgb)
+        self.line_width_dock = QtWidgets.QDockWidget(self.tr("Line Width"), self)
+        self.line_width_dock.setObjectName("Line Width")
+        self.line_width_dock.setWidget(self.uniqLineWidthList)
 
         self.fileSearch = QtWidgets.QLineEdit()
         self.fileSearch.setPlaceholderText(self.tr("Search Filename"))
@@ -191,7 +224,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(scrollArea)
 
         features = QtWidgets.QDockWidget.DockWidgetFeatures()
-        for dock in ["flag_dock", "label_dock", "shape_dock", "file_dock"]:
+        for dock in ["flag_dock", "label_dock", "shape_dock", "file_dock", "line_width_dock"]:  #, "shape_lw_dock"]:
             if self._config[dock]["closable"]:
                 features = features | QtWidgets.QDockWidget.DockWidgetClosable
             if self._config[dock]["floatable"]:
@@ -206,6 +239,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, self.label_dock)
         self.addDockWidget(Qt.RightDockWidgetArea, self.shape_dock)
         self.addDockWidget(Qt.RightDockWidgetArea, self.file_dock)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.line_width_dock)
 
         # Actions
         action = functools.partial(utils.newAction, self)
@@ -556,6 +590,15 @@ class MainWindow(QtWidgets.QMainWindow):
             enabled=False,
         )
 
+        edit_line_width = action(
+            self.tr("&Edit Line Width"),
+            self.editLineWidth,
+            shortcuts["edit_line_width"],
+            "edit_line_width",
+            self.tr("Modify the line width of the selected linestrip"),
+            enabled=False,
+        )
+
         fill_drawing = action(
             self.tr("Fill Drawing Polygon"),
             self.canvas.setFillDrawing,
@@ -697,6 +740,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.label_dock.toggleViewAction(),
                 self.shape_dock.toggleViewAction(),
                 self.file_dock.toggleViewAction(),
+                self.line_width_dock.toggleViewAction(),
                 None,
                 fill_drawing,
                 None,
@@ -738,6 +782,7 @@ class MainWindow(QtWidgets.QMainWindow):
             deleteFile,
             None,
             createMode,
+            createLineStripMode,
             editMode,
             duplicate,
             copy,
@@ -1040,6 +1085,18 @@ class MainWindow(QtWidgets.QMainWindow):
                     return True
         return False
 
+    def validateLineWidth(self, line_width):
+        # no validation
+        if self._config["validate_line_width"] is None:
+            return True
+
+        for i in range(self.uniqLineWidthList.count()):
+            line_width_i = self.uniqLineWidthList.item(i).data(Qt.UserRole)
+            if self._config["validate_line_width"] in ["exact"]:
+                if line_width_i == line_width:
+                    return True
+        return False
+
     def editLabel(self, item=None):
         if item and not isinstance(item, LabelListWidgetItem):
             raise TypeError("item must be LabelListWidgetItem type")
@@ -1058,7 +1115,14 @@ class MainWindow(QtWidgets.QMainWindow):
             flags=shape.flags,
             group_id=shape.group_id,
         )
+        line_width_text, line_width_flags, line_width_group_id = self.lineWidthDialog.popUp(
+            text=str(shape.line_width),
+            flags=shape.flags,
+            group_id=shape.group_id,
+        )
         if text is None:
+            return
+        if line_width_text is None:
             return
         if not self.validateLabel(text):
             self.errorMessage(
@@ -1068,7 +1132,18 @@ class MainWindow(QtWidgets.QMainWindow):
                 ),
             )
             return
+        if not self.validateLineWidth(line_width_text):
+            self.errorMessage(
+                self.tr("Invalid line width"),
+                self.tr("Invalid line width '{}' with validation type '{}'").format(
+                    text, self._config["validate_line_width"]
+                ),
+            )
+            return
         shape.label = text
+        # TODO: confirm below
+        if shape.shape_type == "linestrip":
+            shape.line_width = int(line_width_text)
         shape.flags = flags
         shape.group_id = group_id
 
@@ -1086,6 +1161,58 @@ class MainWindow(QtWidgets.QMainWindow):
             item = QtWidgets.QListWidgetItem()
             item.setData(Qt.UserRole, shape.label)
             self.uniqLabelList.addItem(item)
+        if not self.uniqLineWidthList.findItemsByLineWidth(shape.line_width):
+            line_width_item = QtWidgets.QListWidgetItem()
+            line_width_item.setData(Qt.UserRole, shape.line_width)
+            self.uniqLineWidthList.addItem(line_width_item)
+
+    # This function is currently useless
+    def editLineWidth(self, item=None):
+        if item and not isinstance(item, LineWidthListWidgetItem):
+            raise TypeError("item must be LineWidthListWidgetItem type")
+
+        if not self.canvas.editing():
+            return
+        if not item:
+            item = self.currentItem()
+        if item is None:
+            return
+        shape = item.shape()
+        if shape is None:
+            return
+        text, flags, group_id = self.lineWidthDialog.popUp(
+            text=shape.line_width,
+            flags=shape.flags,
+            group_id=shape.group_id,
+        )
+        if text is None:
+            return
+        if not self.validateLineWidth(text):
+            self.errorMessage(
+                self.tr("Invalid line width"),
+                self.tr("Invalid line width '{}' with validation type '{}'").format(
+                    text, self._config["validate_line_width"]
+                ),
+            )
+            return
+        shape.line_width = text
+        shape.flags = flags
+        shape.group_id = group_id
+
+        self._update_shape_color(shape)
+        if shape.group_id is None:
+            item.setText(
+                '{} <font color="#{:02x}{:02x}{:02x}">●</font>'.format(
+                    shape.line_width, *shape.fill_color.getRgb()[:3]
+                )
+            )
+        else:
+            item.setText("{} ({})".format(shape.line_width, shape.group_id))
+        self.setDirty()
+        if not self.uniqLineWidthList.findItemsByLineWidth(shape.line_width):
+            item = QtWidgets.QListWidgetItem()
+            item.setData(Qt.UserRole, shape.line_width)
+            self.uniqLineWidthList.addItem(item)
 
     def fileSearchChanged(self):
         self.importDirImages(
@@ -1151,6 +1278,28 @@ class MainWindow(QtWidgets.QMainWindow):
             )
         )
 
+    def addLineWidth(self, shape):
+        if shape.group_id is None:
+            text = shape.line_width
+        else:
+            text = "{} ({})".format(shape.line_width, shape.group_id)
+        line_width_list_item = LineWidthListWidgetItem(text, shape)
+        if not self.uniqLineWidthList.findItemsByLineWidth(shape.line_width):
+            item = self.uniqLineWidthList.createItemFromLineWidth(shape.line_width)
+            self.uniqLineWidthList.addItem(item)
+            rgb = self._get_rgb_by_line_width(shape.line_width)
+            self.uniqLineWidthList.setItemLineWidth(item, shape.line_width, rgb)
+        self.lineWidthDialog.addLineWidthHistory(shape.line_width)
+        for action in self.actions.onShapesPresent:
+            action.setEnabled(True)
+
+        self._update_shape_color(shape)
+        line_width_list_item.setText(
+            '{} <font color="#{:02x}{:02x}{:02x}">●</font>'.format(
+                text, *shape.fill_color.getRgb()[:3]
+            )
+        )
+
     def _update_shape_color(self, shape):
         r, g, b = self._get_rgb_by_label(shape.label)
         shape.line_color = QtGui.QColor(r, g, b)
@@ -1176,6 +1325,22 @@ class MainWindow(QtWidgets.QMainWindow):
             return self._config["default_shape_color"]
         return (0, 255, 0)
 
+    def _get_rgb_by_line_width(self, line_width):
+        if self._config["shape_color"] == "auto":
+            item = self.uniqLineWidthList.findItemsByLineWidth(line_width)[0]
+            line_width_id = self.uniqLineWidthList.indexFromItem(item).row() + 1
+            line_width_id += self._config["shift_auto_shape_color"]
+            return LINE_WIDTH_COLORMAP[line_width_id % len(LINE_WIDTH_COLORMAP)]
+        elif (
+            self._config["shape_color"] == "manual"
+            and self._config["line_width_colors"]
+            and line_width in self._config["line_width_colors"]
+        ):
+            return self._config["line_width_colors"][line_width]
+        elif self._config["default_shape_color"]:
+            return self._config["default_shape_color"]
+        return (0, 255, 0)
+
     def remLabels(self, shapes):
         for shape in shapes:
             item = self.labelList.findItemByShape(shape)
@@ -1185,6 +1350,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._noSelectionSlot = True
         for shape in shapes:
             self.addLabel(shape)
+            self.addLineWidth(shape)
         self.labelList.clearSelection()
         self._noSelectionSlot = False
         self.canvas.loadShapes(shapes, replace=replace)
@@ -1197,6 +1363,7 @@ class MainWindow(QtWidgets.QMainWindow):
             shape_type = shape["shape_type"]
             flags = shape["flags"]
             group_id = shape["group_id"]
+            line_width = shape["line_width"]
             other_data = shape["other_data"]
 
             if not points:
@@ -1205,6 +1372,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
             shape = Shape(
                 label=label,
+                line_width=line_width,
                 shape_type=shape_type,
                 group_id=group_id,
             )
@@ -1245,6 +1413,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     group_id=s.group_id,
                     shape_type=s.shape_type,
                     flags=s.flags,
+                    line_width=s.line_width,
                 )
             )
             return data
@@ -1293,6 +1462,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.labelList.clearSelection()
         for shape in added_shapes:
             self.addLabel(shape)
+            self.addLineWidth(shape)
         self.setDirty()
 
     def pasteSelectedShape(self):
@@ -1332,15 +1502,24 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         items = self.uniqLabelList.selectedItems()
         text = None
+
+        line_width_items = self.uniqLineWidthList.selectedItems()
+        line_width_text = None
+
         if items:
             text = items[0].data(Qt.UserRole)
+        if line_width_items:
+            line_width_text = line_width_items[0].data(Qt.UserRole)
+
         flags = {}
         group_id = None
+
         if self._config["display_label_popup"] or not text:
             previous_text = self.labelDialog.edit.text()
             text, flags, group_id = self.labelDialog.popUp(text)
             if not text:
                 self.labelDialog.edit.setText(previous_text)
+        line_width_text, _, _ = self.lineWidthDialog.popUp(line_width_text)
 
         if text and not self.validateLabel(text):
             self.errorMessage(
@@ -1350,11 +1529,24 @@ class MainWindow(QtWidgets.QMainWindow):
                 ),
             )
             text = ""
-        if text:
+        if line_width_text and not self.validateLineWidth(line_width_text):
+            self.errorMessage(
+                self.tr("Invalid line width"),
+                self.tr("Invalid line width '{}' with validation type '{}'").format(
+                    line_width_text, self._config["validate_line_width"]
+                ),
+            )
+            line_width_text = ""
+
+        if text and line_width_text:
             self.labelList.clearSelection()
             shape = self.canvas.setLastLabel(text, flags)
+            shape.set_line_width(int(line_width_text))
+            self.canvas.setLineWidth(int(line_width_text))
+            self.canvas.setLastLabel(text, flags)
             shape.group_id = group_id
             self.addLabel(shape)
+            self.addLineWidth(shape)
             self.actions.editMode.setEnabled(True)
             self.actions.undoLastPoint.setEnabled(False)
             self.actions.undo.setEnabled(True)
@@ -1953,6 +2145,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.canvas.endMove(copy=True)
         for shape in self.canvas.selectedShapes:
             self.addLabel(shape)
+            self.addLineWidth(shape)
         self.labelList.clearSelection()
         self.setDirty()
 

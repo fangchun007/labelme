@@ -71,6 +71,9 @@ def addActions(widget, actions):
 def labelValidator():
     return QtGui.QRegExpValidator(QtCore.QRegExp(r"^[^ \t].+"), None)
 
+def lineWidthValidator():
+    return QtGui.QRegExpValidator(QtCore.QRegExp(r"^[^ \t].+"), None)
+
 
 class struct(object):
     def __init__(self, **kwargs):
